@@ -10,13 +10,19 @@ import org.osmdroid.tileprovider.MapTileProviderBasic;
 import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase;
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory;
 import org.osmdroid.util.GeoPoint;
+import org.osmdroid.views.MapController;
 import org.osmdroid.views.MapView;
 import org.osmdroid.views.overlay.ItemizedIconOverlay.OnItemGestureListener;
+import org.osmdroid.views.overlay.MyLocationOverlay;
 import org.osmdroid.views.overlay.OverlayItem;
 import org.osmdroid.views.overlay.TilesOverlay;
 
 import android.app.Activity;
+import android.content.Context;
 import android.graphics.Color;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -28,12 +34,17 @@ import android.widget.Toast;
 public class MainActivity extends Activity {
 
     private MapView osmMapview;
+    private MapController mapController;
+    
     private PointItemizedOverlay<OverlayItem> mLocationOverlay;
 
     private static final int TILE_SOURCE = Menu.FIRST;
     private static final int OSMOSA = TILE_SOURCE + 1;
     private static final int OPENSTREETMAP = OSMOSA + 1;
     private boolean isOsmosa = true;
+
+    private LocationManager locationManager;
+    private MyLocationOverlay myLocationOverlay;
 
     @Override
     public void onCreate(final Bundle savedInstanceState) {
@@ -59,10 +70,51 @@ public class MainActivity extends Activity {
                             this.getResources().getDrawable(R.drawable.marker_default), itemGestureListener, this);
             osmMapview.getOverlays().add(mLocationOverlay);
         }
-
+        mapController = osmMapview.getController();
+        mapController.setZoom(14);
+        locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 0, locationListener);
+        
         setContentView(relativeLayout);
+        
+        myLocationOverlay = new MyLocationOverlay(this, osmMapview, new ResourceProxyImpl(this));
+        osmMapview.getOverlays().add(myLocationOverlay);
+        myLocationOverlay.runOnFirstFix(new Runnable() {
+            public void run() {
+                osmMapview.getController().animateTo(myLocationOverlay.getMyLocation());
+            }
+        });
     }
+    
+    private LocationListener locationListener = new LocationListener() {
 
+        @Override
+        public void onStatusChanged(String provider, int status, Bundle extras) {
+            // TODO Auto-generated method stub
+
+        }
+
+        @Override
+        public void onProviderEnabled(String provider) {
+            // TODO Auto-generated method stub
+
+        }
+
+        @Override
+        public void onProviderDisabled(String provider) {
+            // TODO Auto-generated method stub
+
+        }
+
+        @Override
+        public void onLocationChanged(Location location) {
+            int lat = (int) (location.getLatitude() * 1E6);
+            int lng = (int) (location.getLongitude() * 1E6);
+            GeoPoint point = new GeoPoint(lat, lng);
+            mapController.animateTo(point);
+        }
+    };
+    
     private OnItemGestureListener<OverlayItem> itemGestureListener = new OnItemGestureListener<OverlayItem>() {
         @Override
         public boolean onItemLongPress(int index, OverlayItem item) {
@@ -103,7 +155,19 @@ public class MainActivity extends Activity {
         }
         return false;
     }
+    
+    @Override
+    protected void onResume() {
+        super.onResume();
+        myLocationOverlay.enableMyLocation();
+    }
 
+    @Override
+    protected void onPause() {
+        super.onResume();
+        myLocationOverlay.disableMyLocation();
+    }
+    
     public void changeServer(OnlineTileSourceBase tileSource) {
         MapTileProviderBasic tileProvider = new MapTileProviderBasic(getApplicationContext());
         tileProvider.setTileSource(tileSource);
